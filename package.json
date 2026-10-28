@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npm run build && wrangler pages dev",
     "test": "node --test",
-    "check": "node --check src/worker.js && node --check public/app.js && node --check public/srs.js && node --check public/parser-worker.js && node --check scripts/build.mjs",
+    "check": "node --check src/worker.js && node --check public/app.js && node --check public/srs.js && node --check public/parser-worker.js && node --check scripts/build.mjs && node --check scripts/sync-catalog.mjs",
     "build": "node scripts/build.mjs",
     "deploy": "npm run build && wrangler pages deploy"
   },

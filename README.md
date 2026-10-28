@@ -42,18 +42,22 @@ npm run build
 
 Pages 会安装 `package-lock.json` 中的依赖，再执行构建。不要将输出目录设置为 `public`，否则 `/api/` 不会作为 Pages Functions 发布。构建后会生成服务端 `_worker.js`，其实现来自 `src/worker.js`，不需要手动同步两份代码。
 
-默认读取公开的 SagerNet GitHub 接口。若遇到 GitHub API 限流，可在 Pages 项目的 **Settings → Variables and Secrets** 添加 `GITHUB_TOKEN` Secret（Production 和 Preview 按需分别设置），只授予读取公开仓库所需权限，然后重新部署。不要在构建变量、客户端代码或仓库中填写 Token；服务端只将它发送到 GitHub API，不发送到 Raw 下载地址。
+运行时不再从 Cloudflare 出口匿名查询 GitHub REST API，无需在 Pages 填写 `GITHUB_TOKEN`。`Sync official catalog` 工作流使用 Actions 内置的临时 `github.token`，每 15 分钟计划检查一次 SagerNet 官方提交和完整目录，将目录快照发布到本仓库 `catalog-data` 分支。Actions 调度可能延迟，不保证固定时刻完成；可在 Actions 页面手动运行该工作流。同步提交使用 `[CF-Pages-Skip]` 前缀，不会为每次目录检查触发 Pages 构建。
 
-本地运行 `npm run dev` 会先构建再启动 Pages 开发服务。修改 `public/` 或 `src/` 后重新运行此命令以更新构建产物。本地 Secret 可写入已被忽略的 `.dev.vars`。
+网站每 5 分钟检查目录快照，Cloudflare 缓存最多 5 分钟；快照时间超过一小时会提示同步延迟。CDN 故障时使用随部署打包的官方快照并明确显示提示，不将打包时间或读取时间伪装成上游检查时间。规则内容仍从 SagerNet 官方固定提交的 `.srs` 路径下载。
 
-本仓库已准备 Pages 配置，但尚未创建 Cloudflare 项目或验证公网部署。
+如果 fork 本仓库，需要在 `src/worker.js` 的 `SNAPSHOT` 中填写自己仓库的快照地址，并初始化 `catalog-data` 分支中的 `catalog.json` 后启用同步工作流；同步失败会显示在 Actions 中。内置快照仅保障部署时已知版本可浏览，不代表一直是最新版本。
+
+本地运行 `npm run dev` 会先构建再启动 Pages 开发服务。修改 `public/` 或 `src/` 后重新运行此命令以更新构建产物。
+
+本仓库已准备 Pages 配置，但已支持 Cloudflare Pages；具体线上状态以部署检查结果为准。
 
 ## 数据与更新
 
 - 唯一规则来源：[SagerNet/sing-geosite 的 rule-set 分支](https://github.com/SagerNet/sing-geosite/tree/rule-set)。通过 Git Tree API 获取全部文件，不使用有文件数量上限的目录列表；目录截断或为空会报错。
-- 首次打开获取目录，Cloudflare 边缘缓存最多 5 分钟。页面可点击“检查更新”，前台运行时也每 5 分钟检查，重新切回标签页时再检查。检查更新会遵循边缘缓存，因此不承诺每次点击都直接请求 GitHub。
-- 先读取 `rule-set` 最新提交，再读取该提交对应的完整目录树。目录返回树 SHA、提交 SHA、官方提交时间与检查时间。明细从提交 SHA 的固定路径读取，避免目录、更新时间和规则在更新时混用版本。固定版本文件缓存一年；新提交自动切换新文件，不需要重新部署。
-- 无访问时不主动同步；下次请求在缓存过期后检查最新分支。上游失败时显示错误；已经打开的页面保留已加载目录，不伪称更新成功。未实现跨会话离线快照。
+- 首次打开获取目录，Cloudflare 边缘缓存最多 5 分钟。页面可点击“检查更新”，前台运行时也每 5 分钟检查，重新切回标签页时按 5 分钟间隔检查。检查更新会遵循边缘缓存，因此不承诺每次点击都直接请求 GitHub。
+- 同步工作流先读取 `rule-set` 最新提交，再读取该提交对应的完整目录树。目录返回树 SHA、提交 SHA、官方提交时间与检查时间。明细从提交 SHA 的固定路径读取，避免目录、更新时间和规则在更新时混用版本。固定版本文件缓存一年；新提交自动切换新文件，不需要重新部署。
+- 同步工作流独立于访问运行；失败时保留最近一次成功快照。CDN 不可用时页面显示打包快照提示，快照超过一小时提示同步延迟。目录没有可用有效快照才报错；页面不会伪称同步成功。
 - 英文界面标题为 `🌳Sing-Geosite Tree`，浏览器标签为 `Geosite-Explorer`。标题下方以 `Last updated: YYYY-MM-DD HH:mm:ss | Version abc1234` 居中显示元数据。更新时间来自 `rule-set` 分支最新提交的 committer 时间（UTC+8），7 位版本来自该提交 SHA；标题下方 `Checked at` 是本网站检查目录的时间。
 - 浏览器 Web Worker 使用 `DecompressionStream` 解压并解析 SRS，避免在 Cloudflare 请求中消耗解析 CPU，也避免阻塞页面主线程。无需 Go、Sing-box 可执行文件或服务端二进制转换。
 
@@ -66,6 +70,8 @@ Pages 会安装 `package-lock.json` 中的依赖，再执行构建。不要将�
 这不是通用 SRS 编辑器；遇到未知版本、非域名字段、逻辑或反向规则时明确报错，不把它们误展示为无条件域名。损坏、截断或解压超过 64 MiB 的文件也报错。需要支持模块 Web Worker 和 DecompressionStream 的现代浏览器。
 
 ## 验证记录
+
+2026-10-28，修复 Pages 运行时 GitHub REST API 共享出口限流：目录改由 Actions 认证同步、CDN 发布，提供明确标注的打包快照降级。保留上游提交、目录 SHA、检查时间和逐文件 SHA。
 
 2026-10-28，新增 Cloudflare Pages 构建配置、API 路由清单和构建产物回归测试。9 项测试、语法检查和 Pages Worker 编译通过；Wrangler 更新至 4.154.0，依赖审计为 0 项漏洞。Pages 本地服务实测成功加载 1,994 个规则集并打开 OpenAI 的 25 条规则。公网部署留待连接 Cloudflare 后验证。
 

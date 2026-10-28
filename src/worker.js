@@ -1,5 +1,6 @@
 const REPO = 'https://api.github.com/repos/SagerNet/sing-geosite';
 const RAW = 'https://raw.githubusercontent.com/SagerNet/sing-geosite';
+const SNAPSHOT = 'https://raw.githubusercontent.com/Fiatnorm/geosite-explorer/catalog-data/catalog.json';
 const TTL = 300;
 const NAME = /^[a-z0-9][a-z0-9@!._-]{0,180}$/;
 const SHA = /^[a-f0-9]{40}$/;
@@ -32,6 +33,33 @@ export function catalogFromTree(tree) {
   return { revision: tree.sha, checkedAt: new Date().toISOString(), entries };
 }
 
+export async function officialCatalog(env) {
+  const head = await (await upstream(`${REPO}/commits/rule-set`, env)).json();
+  const treeSha = head.commit?.tree?.sha;
+  const updatedAt = head.commit?.committer?.date;
+  if (!SHA.test(head.sha) || !SHA.test(treeSha) || !updatedAt || !Number.isFinite(Date.parse(updatedAt))) {
+    throw new Error('Upstream commit metadata is incomplete. Please try again later.');
+  }
+  const tree = await (await upstream(`${REPO}/git/trees/${treeSha}`, env)).json();
+  if (tree.sha !== treeSha) throw new Error('Upstream directory version mismatch. Please try again later.');
+  return { ...catalogFromTree(tree), commit: head.sha, updatedAt };
+}
+
+export function validateCatalog(data) {
+  if (!SHA.test(data?.revision) || !SHA.test(data?.commit) || !Number.isFinite(Date.parse(data?.updatedAt)) ||
+      !Number.isFinite(Date.parse(data?.checkedAt)) || !Array.isArray(data?.entries) || !data.entries.length) {
+    throw new Error('Invalid catalog snapshot.');
+  }
+  const names = new Set();
+  for (const item of data.entries) {
+    if (!NAME.test(item.name) || !SHA.test(item.sha) || !Number.isSafeInteger(item.size) || item.size < 0 || names.has(item.name)) {
+      throw new Error('Invalid catalog snapshot entry.');
+    }
+    names.add(item.name);
+  }
+  return data;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -40,18 +68,18 @@ export default {
     try {
       const cache = globalThis.caches?.default;
       if (url.pathname === '/api/catalog') {
-        const key = new Request(`${url.origin}/api/catalog?schema=3`);
+        const key = new Request(`${url.origin}/api/catalog?schema=4`);
         const hit = await cache?.match(key);
         if (hit) return hit;
-        const head = await (await upstream(`${REPO}/commits/rule-set`, env)).json();
-        const treeSha = head.commit?.tree?.sha;
-        const updatedAt = head.commit?.committer?.date;
-        if (!SHA.test(head.sha) || !SHA.test(treeSha) || !updatedAt || !Number.isFinite(Date.parse(updatedAt))) {
-          throw new Error('Upstream commit metadata is incomplete. Please try again later.');
+        let data;
+        try {
+          data = validateCatalog(await (await upstream(SNAPSHOT, {})).json());
+        } catch {
+          // A bundled official snapshot keeps first visits usable during CDN outages.
+          const bundled = await env.ASSETS.fetch(new Request(`${url.origin}/catalog.json`));
+          if (!bundled.ok) throw new Error('Catalog sync is unavailable. Please try again later.');
+          data = { ...validateCatalog(await bundled.json()), warning: 'Live catalog sync is unavailable. Showing the bundled snapshot; check its timestamp.' };
         }
-        const tree = await (await upstream(`${REPO}/git/trees/${treeSha}`, env)).json();
-        if (tree.sha !== treeSha) throw new Error('Upstream directory version mismatch. Please try again later.');
-        const data = { ...catalogFromTree(tree), commit: head.sha, updatedAt };
         const response = json(data, 200, { 'Cache-Control': `public, max-age=0, s-maxage=${TTL}` });
         if (cache) ctx.waitUntil(cache.put(key, new Response(response.clone().body, {
           headers: { 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${TTL}` }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { catalogFromTree } from '../src/worker.js';
+import worker, { catalogFromTree, officialCatalog, validateCatalog } from '../src/worker.js';
 
 const revision = 'a'.repeat(40), sha = 'b'.repeat(40);
 const tree = { sha: revision, truncated: false, tree: [
@@ -10,6 +10,7 @@ const tree = { sha: revision, truncated: false, tree: [
   { type: 'blob', path: 'README.md', size: 10, sha }
 ] };
 const ctx = { waitUntil() {} };
+const snapshot = { ...catalogFromTree(tree), commit: 'c'.repeat(40), updatedAt: '2026-10-23T02:03:04Z' };
 const updatedAt = '2026-10-23T02:03:04Z';
 const head = { sha: 'c'.repeat(40), commit: { tree: { sha: revision }, committer: { date: updatedAt } } };
 
@@ -34,10 +35,7 @@ test('upstream errors are visible and not reported as empty success', async () =
   const original = globalThis.fetch;
   globalThis.fetch = async () => new Response('', { status: 429 });
   try {
-    const response = await worker.fetch(new Request('https://example.com/api/catalog'), {}, ctx);
-    assert.equal(response.status, 502);
-    assert.match((await response.json()).error, /rate limit/);
-    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    await assert.rejects(officialCatalog({}), /rate limit/);
   } finally { globalThis.fetch = original; }
 });
 
@@ -49,8 +47,7 @@ test('catalog API fetches complete tree and SRS API pins the requested immutable
     return url.includes('/git/trees/') ? Response.json(tree) : new Response('SRS bytes');
   };
   try {
-    const response = await worker.fetch(new Request('https://example.com/api/catalog'), { GITHUB_TOKEN: 'test-token' }, ctx);
-    const catalog = await response.json();
+    const catalog = await officialCatalog({ GITHUB_TOKEN: 'test-token' });
     assert.equal(catalog.entries.length, 3);
     assert.equal(catalog.updatedAt, updatedAt);
     assert.equal(catalog.commit, head.sha);
@@ -68,10 +65,51 @@ test('missing commit timestamp and mismatched tree cannot produce a successful c
   const original = globalThis.fetch;
   try {
     globalThis.fetch = async () => Response.json({ ...head, commit: { ...head.commit, committer: {} } });
-    let response = await worker.fetch(new Request('https://example.com/api/catalog'), {}, ctx);
-    assert.equal(response.status, 502);
+    await assert.rejects(officialCatalog({}), /metadata/);
     globalThis.fetch = async url => Response.json(url.endsWith('/commits/rule-set') ? head : { ...tree, sha: 'd'.repeat(40) });
-    response = await worker.fetch(new Request('https://example.com/api/catalog'), {}, ctx);
-    assert.equal(response.status, 502);
+    await assert.rejects(officialCatalog({}), /mismatch/);
   } finally { globalThis.fetch = original; }
+});
+
+
+test('runtime catalog uses CDN snapshot without REST API or credentials', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, 'https://raw.githubusercontent.com/Fiatnorm/geosite-explorer/catalog-data/catalog.json');
+    assert.equal(options.headers.Authorization, undefined);
+    return Response.json(snapshot);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://example.com/api/catalog'), { GITHUB_TOKEN: 'must-not-leak' }, ctx);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), snapshot);
+  } finally { globalThis.fetch = original; }
+});
+
+test('CDN failure uses bundled snapshot and preserves timestamp with a visible warning', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response('', { status: 429 });
+  try {
+    const env = { ASSETS: { async fetch(request) {
+      assert.equal(new URL(request.url).pathname, '/catalog.json');
+      return Response.json(snapshot);
+    } } };
+    const response = await worker.fetch(new Request('https://example.com/api/catalog'), env, ctx);
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.checkedAt, snapshot.checkedAt);
+    assert.equal(result.commit, snapshot.commit);
+    assert.match(result.warning, /bundled snapshot/);
+    const failure = await worker.fetch(new Request('https://example.com/api/catalog'), { ASSETS: {fetch: async () => new Response('', {status:404})} }, ctx);
+    assert.equal(failure.status, 502);
+    assert.equal(failure.headers.get('Cache-Control'), 'no-store');
+  } finally { globalThis.fetch = original; }
+});
+
+test('snapshot validator rejects incomplete, duplicate and unsafe metadata', () => {
+  assert.equal(validateCatalog(snapshot), snapshot);
+  for (const patch of [{entries:[]}, {checkedAt:'bad'}, {commit:'rule-set'}, {entries:[...snapshot.entries, snapshot.entries[0]]},
+    {entries:[{...snapshot.entries[0],name:'../secret'}]}, {entries:[{...snapshot.entries[0],size:-1}]}]) {
+    assert.throws(() => validateCatalog({...snapshot,...patch}));
+  }
 });

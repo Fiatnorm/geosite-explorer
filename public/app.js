@@ -197,8 +197,11 @@ async function loadCatalog(manual = false) {
     else {
       updateMetadata();
     }
-    $('notice').hidden = true;
-    if (manual) toast(changed ? 'Updated to the latest rules.' : 'Showing the latest checked version (cached for up to 5 minutes).');
+    const stale = Date.now() - Date.parse(catalog.checkedAt) > 60 * 60 * 1000;
+    $('notice').textContent = catalog.warning || (stale ? 'Catalog sync is delayed. Showing the last successful snapshot; check its timestamp.' : '');
+    $('notice').className = 'notice';
+    $('notice').hidden = !catalog.warning && !stale;
+    if (manual) toast(changed ? 'Updated to the latest rules.' : 'Showing the latest available catalog snapshot (cached for up to 5 minutes).');
   } catch (error) {
     $('notice').textContent = `${error.name === 'TimeoutError' ? 'Loading timed out. Please try again.' : error.message}${catalog ? ' Previously loaded rule sets are still available.' : ' Click “Check for updates” to retry.'}`;
     $('notice').className = 'notice error'; $('notice').hidden = false;
