@@ -1,0 +1,6 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "geosite-explorer",
+  "compatibility_date": "2026-10-23",
+  "pages_build_output_dir": "./dist"
+}

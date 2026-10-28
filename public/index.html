@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Browse, search, and explore the latest SagerNet GeoSite rules.">
+  <title>Geosite-Explorer</title>
+  <link rel="icon" href="/favicon.png?v=3" type="image/png">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/theme.js"></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Geosite-Explorer home"><img src="/favicon.png?v=3" alt=""><span>Geosite-Explorer</span></a>
+    <div class="top-actions"><a class="source-link" href="https://github.com/SagerNet/sing-geosite/tree/rule-set" target="_blank" rel="noreferrer">SagerNet / sing-geosite <span aria-hidden="true">↗</span></a><button id="theme" class="icon-button" aria-label="Switch to dark theme" title="Toggle theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button></div>
+  </header>
+  <main>
+    <section class="intro">
+      <h1>🌳Sing-Geosite Tree</h1>
+      <p class="description" role="status" title="Official rule-set commit time (UTC+8)"><span id="upstream-updated">Last updated: Loading…</span> | <span id="revision">Version —</span></p>
+      <div class="source-status"><span><span class="status-dot"></span> Source: SagerNet official rule-set branch</span><span id="checked">Checks for updates every 5 minutes</span></div>
+    </section>
+    <section class="catalog" aria-label="GeoSite rule sets">
+      <div class="catalog-top"><div class="section-title"><h2>All rule sets</h2><span id="total" class="chip">Loading</span></div><button id="refresh" class="text-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/></svg>Check for updates</button></div>
+      <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="search" type="search" placeholder="Search rule sets, e.g. openai, google, cn" aria-label="Search rule sets" autocomplete="off"><kbd>/</kbd></label>
+      <div class="list-meta"><span id="result-count" role="status">Loading the official rule set list…</span></div>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <div id="list" aria-busy="true"></div>
+      <div id="empty" class="empty" hidden><span aria-hidden="true">⌕</span><h3>No rule sets found</h3><p>Try another name or clear the search to view all rules.</p></div>
+    </section>
+  </main>
+  <dialog id="domains" class="domain-dialog" aria-labelledby="dialog-title">
+    <header class="dialog-header"><div><p class="eyebrow">DOMAIN RULES</p><h2 id="dialog-title"></h2></div><button id="close-dialog" class="icon-button" aria-label="Close domain rules" autofocus><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header>
+    <div id="domain-content" class="dialog-content"></div>
+  </dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <noscript>Please enable JavaScript to load and parse GeoSite rules.</noscript>
+</body>
+</html>

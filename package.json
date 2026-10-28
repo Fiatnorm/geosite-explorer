@@ -1,0 +1,28 @@
+{
+  "name": "geosite-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && wrangler pages dev",
+    "test": "node --test",
+    "check": "node --check src/worker.js && node --check public/app.js && node --check public/srs.js && node --check public/parser-worker.js && node --check scripts/build.mjs",
+    "build": "node scripts/build.mjs",
+    "deploy": "npm run build && wrangler pages deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "description": "Material 3 GeoSite rule-set explorer for Sing-box, ready for Cloudflare Pages.",
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fiatnorm/geosite-explorer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Fiatnorm/geosite-explorer/issues"
+  },
+  "homepage": "https://github.com/Fiatnorm/geosite-explorer#readme"
+}
