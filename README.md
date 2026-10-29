@@ -42,11 +42,11 @@ npm run build
 
 Pages 会安装 `package-lock.json` 中的依赖，再执行构建。不要将输出目录设置为 `public`，否则 `/api/` 不会作为 Pages Functions 发布。构建后会生成服务端 `_worker.js`，其实现来自 `src/worker.js`，不需要手动同步两份代码。
 
-运行时不再从 Cloudflare 出口匿名查询 GitHub REST API，无需在 Pages 填写 `GITHUB_TOKEN`。`Sync official catalog` 工作流使用 Actions 内置的临时 `github.token`，每 15 分钟计划检查一次 SagerNet 官方提交和完整目录，将目录快照发布到本仓库 `catalog-data` 分支。Actions 调度可能延迟，不保证固定时刻完成；可在 Actions 页面手动运行该工作流。同步提交使用 `[CF-Pages-Skip]` 前缀，不会为每次目录检查触发 Pages 构建。
+运行时不再从 Cloudflare 出口匿名查询 GitHub REST API，无需在 Pages 填写 `GITHUB_TOKEN`。`Sync official catalog` 工作流使用 Actions 内置的临时 `github.token`，每 15 分钟计划检查一次 SagerNet 官方提交和完整目录，将目录快照直接更新到本仓库 `main` 分支的 `public/catalog.json`。Actions 调度可能延迟，不保证固定时刻完成；可在 Actions 页面手动运行该工作流。同步提交不带跳过构建标记，Pages 的 Git 自动部署会随 `main` 更新触发生产构建。每次成功检查都会更新 `checkedAt`，即使上游版本未变化也会提交并触发构建；需将这些构建计入 Pages 配额。
 
 网站每 5 分钟检查目录快照，Cloudflare 缓存最多 5 分钟；快照时间超过一小时会提示同步延迟。CDN 故障时使用随部署打包的官方快照并明确显示提示，不将打包时间或读取时间伪装成上游检查时间。规则内容仍从 SagerNet 官方固定提交的 `.srs` 路径下载。
 
-如果 fork 本仓库，需要在 `src/worker.js` 的 `SNAPSHOT` 中填写自己仓库的快照地址，并初始化 `catalog-data` 分支中的 `catalog.json` 后启用同步工作流；同步失败会显示在 Actions 中。内置快照仅保障部署时已知版本可浏览，不代表一直是最新版本。
+如果 fork 本仓库，需要在 `src/worker.js` 的 `SNAPSHOT` 中填写自己仓库的快照地址，并确保 `main` 分支包含 `public/catalog.json` 后启用同步工作流；工作流需有写入 `main` 的权限；同步失败会显示在 Actions 中。内置快照仅保障部署时已知版本可浏览，不代表一直是最新版本。
 
 本地运行 `npm run dev` 会先构建再启动 Pages 开发服务。修改 `public/` 或 `src/` 后重新运行此命令以更新构建产物。
 
@@ -56,7 +56,7 @@ Pages 会安装 `package-lock.json` 中的依赖，再执行构建。不要将�
 
 - 唯一规则来源：[SagerNet/sing-geosite 的 rule-set 分支](https://github.com/SagerNet/sing-geosite/tree/rule-set)。通过 Git Tree API 获取全部文件，不使用有文件数量上限的目录列表；目录截断或为空会报错。
 - 首次打开获取目录，Cloudflare 边缘缓存最多 5 分钟。页面可点击“检查更新”，前台运行时也每 5 分钟检查，重新切回标签页时按 5 分钟间隔检查。检查更新会遵循边缘缓存，因此不承诺每次点击都直接请求 GitHub。
-- 同步工作流先读取 `rule-set` 最新提交，再读取该提交对应的完整目录树。目录返回树 SHA、提交 SHA、官方提交时间与检查时间。明细从提交 SHA 的固定路径读取，避免目录、更新时间和规则在更新时混用版本。固定版本文件缓存一年；新提交自动切换新文件，不需要重新部署。
+- 同步工作流先读取 `rule-set` 最新提交，再读取该提交对应的完整目录树。目录返回树 SHA、提交 SHA、官方提交时间与检查时间。明细从提交 SHA 的固定路径读取，避免目录、更新时间和规则在更新时混用版本。固定版本文件缓存一年；新提交自动切换新文件；目录同步提交同时触发 Pages 重新部署以更新打包快照。
 - 同步工作流独立于访问运行；失败时保留最近一次成功快照。CDN 不可用时页面显示打包快照提示，快照超过一小时提示同步延迟。目录没有可用有效快照才报错；页面不会伪称同步成功。
 - 英文界面标题为 `🌳Sing-Geosite Tree`，浏览器标签为 `Geosite-Explorer`。标题下方以 `Last updated: YYYY-MM-DD HH:mm:ss | Version abc1234` 居中显示元数据。更新时间来自 `rule-set` 分支最新提交的 committer 时间（UTC+8），7 位版本来自该提交 SHA；标题下方 `Checked at` 是本网站检查目录的时间。
 - 浏览器 Web Worker 使用 `DecompressionStream` 解压并解析 SRS，避免在 Cloudflare 请求中消耗解析 CPU，也避免阻塞页面主线程。无需 Go、Sing-box 可执行文件或服务端二进制转换。

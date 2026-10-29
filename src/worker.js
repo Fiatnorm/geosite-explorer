@@ -1,6 +1,6 @@
 const REPO = 'https://api.github.com/repos/SagerNet/sing-geosite';
 const RAW = 'https://raw.githubusercontent.com/SagerNet/sing-geosite';
-const SNAPSHOT = 'https://raw.githubusercontent.com/Fiatnorm/geosite-explorer/catalog-data/catalog.json';
+const SNAPSHOT = 'https://raw.githubusercontent.com/Fiatnorm/geosite-explorer/main/public/catalog.json';
 const TTL = 300;
 const NAME = /^[a-z0-9][a-z0-9@!._-]{0,180}$/;
 const SHA = /^[a-f0-9]{40}$/;

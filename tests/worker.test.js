@@ -75,7 +75,7 @@ test('missing commit timestamp and mismatched tree cannot produce a successful c
 test('runtime catalog uses CDN snapshot without REST API or credentials', async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
-    assert.equal(url, 'https://raw.githubusercontent.com/Fiatnorm/geosite-explorer/catalog-data/catalog.json');
+    assert.equal(url, 'https://raw.githubusercontent.com/Fiatnorm/geosite-explorer/main/public/catalog.json');
     assert.equal(options.headers.Authorization, undefined);
     return Response.json(snapshot);
   };
